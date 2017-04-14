@@ -1,0 +1,5 @@
+Locations:
+- /path/to/your/log.txt
+- /path/to/your/second/log.txt
+- /path/to/your/third/log.txt
+ClearLogsOnClose: false
