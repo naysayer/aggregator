@@ -5,12 +5,13 @@ This is a log aggregator, there are many like it, but this one is mine. Written 
 ## Command line flags
 ### Please note: this program supports 2 forms of configuration:
 You can either use the -config flag, which points to a config.yaml with your configuration outlined at that location, or you can use same configuration by using the verity of other command line flags. Please note you should not mix the config flag with other command line flags. This multi config setup was implemented to prevent issues when trying to aggrage a large list of log files - as managing a config file is much easier that a long list of flags. 
+
 | Command line flag | Value Type | Description | Example |
 | ------ | ------ | ------ | ----- |
-| -config | String | In the event you do not want to use the Command line flags, you can use a config file to list where your log files to aggregate are located. This flag tells aggregator where to find the config.yaml file. The string you provide is the path to where your config.yaml file is located| ./aggregator -config=Path/to/config
-| -logFiles | Array of strings - seperated by comma | Provide a comma seperated list of strings, this tells aggregator the locations of the log files you want to aggregate. | ./aggregator -logFiles=/path/one.txt,/path/two.txt
-| -clear | boolean | This will clear the log files you are aggregating upon termination of this program. This is good for development, use with caution.| ./aggregator -clear=true (default is false)
-|-logToFile| string | In the event you want to have this program aggreagte logs into a single file rather than stream to the terminal, use this option to pass a string to the location where you want to log, if a file is not present at that location, we will attempt to create one.| ./aggregator -logToFile=/path/to/file.txt
+| -config | String | In the event you do not want to use the Command line flags, you can use a config file to list where your log files to aggregate are located. This flag tells aggregator where to find the config.yaml file. The string you provide is the path to where your config.yaml file is located| ./aggregator -config=Path/to/config|
+| -logFiles | Array of strings - seperated by comma | Provide a comma seperated list of strings, this tells aggregator the locations of the log files you want to aggregate. | ./aggregator -logFiles=/path/one.txt,/path/two.txt|
+| -clear | boolean | This will clear the log files you are aggregating upon termination of this program. This is good for development, use with caution.| ./aggregator -clear=true (default is false)|
+|-logToFile| string | In the event you want to have this program aggreagte logs into a single file rather than stream to the terminal, use this option to pass a string to the location where you want to log, if a file is not present at that location, we will attempt to create one.| ./aggregator -logToFile=/path/to/file.txt|
 
 ## Built with the following open source golang packages
 
