@@ -16,6 +16,8 @@ var (
 	locations         cli.StringSlice
 	Config            string
 	ClearFilesOnClose bool
+	LogToFile         string
+	LogFile           *os.File
 	wg                sync.WaitGroup
 	Tails             []*tail.Tail
 )
@@ -41,31 +43,51 @@ func main() {
 			Usage:       "This will clear the log files you are aggregating upon termination of this program. This is good for development, use with caution.",
 			Destination: &ClearFilesOnClose,
 		},
+		cli.StringFlag{
+			Name:        "logToFile",
+			Usage:       "In the event you want to have this program aggreagte logs into a single file rather than stream to the terminal, use this option to pass a string to the location where you want to log, if a file is not present at that location, we will attempt to create one.",
+			Destination: &LogToFile,
+		},
 	}
 	app.Action = func(c *cli.Context) error {
 		useConfigFile := useConfigFile(Config)
 		readConfigFile(useConfigFile, Config)
+
+		if useConfigFile {
+			ClearFilesOnClose = viper.GetBool("ClearLogsOnClose")
+			LogToFile = viper.GetString("LogToFile")
+		}
+		if LogToFile != "" {
+			LogFile, err := os.OpenFile(LogToFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.SetOutput(LogFile)
+		}
 
 		logLocations, err := obtainLogLocations(useConfigFile)
 		if err != nil {
 			return err
 		}
 
-		if useConfigFile {
-			ClearFilesOnClose = viper.GetBool("ClearLogsOnClose")
-		}
-
 		go handleClosing()
-		aggregateLogs(logLocations) // Spawns 1 go routine per call
 
-		log.Println("should clear log file", ClearFilesOnClose)
+		// This will block due to a waitgroup, it will close upon os.Exit, see the
+		// handleClosing() functions to better understand the lifecycle
+		aggregateLogs(logLocations)
+
 		if ClearFilesOnClose {
 			clearFiles(logLocations)
 		}
+
+		if LogToFile != "" {
+			LogFile.Close()
+		}
+
 		log.Println("Shutting down")
 		return nil
 	}
-
 	app.Run(os.Args)
 }
 
@@ -84,6 +106,10 @@ func handleClosing() {
 	}()
 }
 
+// Technically this orphans a goroutine per iteration, this is due to
+// limitations within the tail library. Normally this is a bad thing, however,
+// it should not matter for this program as it terminates and is not a
+// long running web app.
 func aggregateLogs(locations []string) {
 	wg.Add(1)
 	for _, l := range locations {

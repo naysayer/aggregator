@@ -3,3 +3,4 @@ Locations:
 - /path/to/your/second/log.txt
 - /path/to/your/third/log.txt
 ClearLogsOnClose: false
+LogToFile: /path/to/the/file/where/you/want/to/aggregate/logs/to.txt
