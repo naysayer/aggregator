@@ -2,13 +2,14 @@ package main
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/spf13/viper"
 )
 
 var (
 	DualConfig        = errors.New("You can only choose to use the config command line flag, or the location + close flag, you cannot use both.")
-	MustProcideConfig = errors.New("Neither a command line flag nor a config file contained the locations of the files you wish to aggregate.")
+	MustProvideConfig = errors.New("Neither a command line flag nor a config file contained the locations of the files you wish to aggregate.")
 )
 
 // useConfigFile should be passed the command like flag that has the path to
@@ -45,18 +46,19 @@ func readConfigFile(useConfigFile bool, configPath string) error {
 // event that both a present, the command line flag takes presidences over
 // the config file.
 
-// obtainLogLocations (please note: this heavly depends no global vars.
-// When starting the app they a user can do 1 of 2 things, then can do config,
-// entirely from the command line, or by only using the config option.)
-// Using the locations flag requires additional formating, so this function,
-// returns a slice of strings with the correctly formatted locations of
-// log files the user wishes to aggregate.
-func obtainLogLocations(useConfig bool) ([]string, error) {
-	if len(locations) > 0 && Config != "" {
+// obtainLogLocations When starting the app they a user can do 1 of 2 things,
+// then can do config, entirely from the command line, or by only using the
+// config option.) Using the locations flag requires additional formating,
+// so this function, returns a slice of strings with the correctly formatted
+// locations of log files the user wishes to aggregate.
+// The locs var that is passed in should be the raw version of the command
+// line flag that supplies log file locations.
+func obtainLogLocations(locs []string, useConfig bool) ([]string, error) {
+	if len(locs) > 0 && Config != "" {
 		return []string{}, DualConfig
 	}
-	if len(locations) < 1 && Config == "" {
-		return []string{}, MustProcideConfig
+	if len(locs) < 1 && Config == "" {
+		return []string{}, MustProvideConfig
 	}
 
 	if useConfig {
@@ -64,10 +66,5 @@ func obtainLogLocations(useConfig bool) ([]string, error) {
 		return locs, nil
 	}
 
-	str := []string{}
-	for _, loc := range locations {
-		str = append(str, loc)
-	}
-	return str, nil
-
+	return strings.Split(locs[0], ","), nil
 }
