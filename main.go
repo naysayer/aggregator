@@ -66,7 +66,7 @@ func main() {
 			log.SetOutput(LogFile)
 		}
 
-		logLocations, err := obtainLogLocations(useConfigFile)
+		logLocations, err := obtainLogLocations(locations, useConfigFile)
 		if err != nil {
 			return err
 		}
