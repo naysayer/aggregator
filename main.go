@@ -19,7 +19,7 @@ var (
 	LogToFile         string
 	LogFile           *os.File
 	wg                sync.WaitGroup
-	Tails             []*tail.Tail
+	closingChannel    = make(chan os.Signal, 1)
 )
 
 func main() {
@@ -50,6 +50,8 @@ func main() {
 		},
 	}
 	app.Action = func(c *cli.Context) error {
+		signal.Notify(closingChannel, os.Interrupt)
+
 		useConfigFile := useConfigFile(Config)
 		readConfigFile(useConfigFile, Config)
 
@@ -71,14 +73,21 @@ func main() {
 			return err
 		}
 
-		go handleClosing()
+		tails, err := ObtainTails(logLocations)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-		// This will block due to a waitgroup, it will close upon os.Exit, see the
-		// handleClosing() functions to better understand the lifecycle
-		aggregateLogs(logLocations)
+		for _, t := range tails {
+			go tailFile(t)
+		}
+
+		<-closingChannel
+
+		HandleClosing(tails)
 
 		if ClearFilesOnClose {
-			clearFiles(logLocations)
+			ClearFiles(logLocations)
 		}
 
 		if LogToFile != "" {
@@ -91,49 +100,44 @@ func main() {
 	app.Run(os.Args)
 }
 
-func handleClosing() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		for _ = range c {
-			log.Println("Attempting cleanup")
-			for _, t := range Tails {
-				t.Stop()
-				t.Cleanup()
-			}
-			wg.Done()
-		}
-	}()
-}
-
-// Technically this orphans a goroutine per iteration, this is due to
-// limitations within the tail library. Normally this is a bad thing, however,
-// it should not matter for this program as it terminates and is not a
-// long running web app.
-func aggregateLogs(locations []string) {
-	wg.Add(1)
-	for _, l := range locations {
-		log.Println("Attempting to integrate log file located at", l)
-
-		t, err := tail.TailFile(l, tail.Config{Follow: true, MustExist: true})
-		if err != nil {
-			log.Println("There was an issue while attmpting to aggregate log file located at", l)
-			log.Fatal(err)
-		}
-
-		go tailFile(t)
-		Tails = append(Tails, t)
-	}
-	wg.Wait()
-}
-
 func tailFile(tail *tail.Tail) {
 	for line := range tail.Lines {
 		log.Println(line.Text)
 	}
 }
 
-func clearFiles(locations []string) {
+// HandleClosing should be called after the program is interrupted. Upon recieving this
+// signal it will range over the tails argument. Tails represents the *tail.Tail
+// value / pointer that is created for each and every file being tailed.
+func HandleClosing(tails []*tail.Tail) {
+	log.Println("Attempting to close aggregator")
+	for _, t := range tails {
+		t.Stop()
+		t.Cleanup()
+	}
+}
+
+// ObtainTails, provided a slice of strings (that is used to represent the
+// locations of log files you wish to aggregate). Will return a matching
+// tail.Tail slice where each value in the slice is mapped from the argumented
+// locations.
+func ObtainTails(locations []string) ([]*tail.Tail, error) {
+	var tails []*tail.Tail
+	for _, l := range locations {
+		t, err := tail.TailFile(l, tail.Config{Follow: true, MustExist: true})
+		if err != nil {
+			log.Println("There was an issue while attmpting to aggregate log file located at", l)
+			return tails, err
+		}
+		tails = append(tails, t)
+	}
+	return tails, nil
+}
+
+// ClearFiles as the name suggests will locate all of the log files within
+// the locations argument - and write all of the bytes to be empty. This
+// is intended to be used per the users settings; and can be handy in development
+func ClearFiles(locations []string) {
 	for _, l := range locations {
 		log.Println("Clearning file at location:", l)
 
