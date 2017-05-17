@@ -126,7 +126,7 @@ func ObtainTails(locations []string) ([]*tail.Tail, error) {
 	for _, l := range locations {
 		t, err := tail.TailFile(l, tail.Config{Follow: true, MustExist: true})
 		if err != nil {
-			log.Println("There was an issue while attmpting to aggregate log file located at", l)
+			log.Println("There was an issue while attmpting to aggregate log file located at:", l)
 			return tails, err
 		}
 		tails = append(tails, t)
