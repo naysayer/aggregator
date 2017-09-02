@@ -26,7 +26,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "aggregator"
 	app.Usage = "Aggregates logs into a single file. Dont't hate, aggregate."
-	app.Version = "0.0.1"
+	app.Version = "0.0.2"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:        "config",
@@ -117,7 +117,7 @@ func HandleClosing(tails []*tail.Tail) {
 	}
 }
 
-// ObtainTails, provided a slice of strings (that is used to represent the
+// ObtainTails provided a slice of strings (that is used to represent the
 // locations of log files you wish to aggregate). Will return a matching
 // tail.Tail slice where each value in the slice is mapped from the argumented
 // locations.

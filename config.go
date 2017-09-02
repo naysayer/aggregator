@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	DualConfig        = errors.New("You can only choose to use the config command line flag, or the location + close flag, you cannot use both.")
-	MustProvideConfig = errors.New("Neither a command line flag nor a config file contained the locations of the files you wish to aggregate.")
+	errDualConfig        = errors.New("you can only choose to use the config command line flag, or the location + close flag, you cannot use both")
+	errMustProvideConfig = errors.New("neither a command line flag nor a config file contained the locations of the files you wish to aggregate")
 )
 
 // useConfigFile should be passed the command like flag that has the path to
@@ -55,10 +55,10 @@ func readConfigFile(useConfigFile bool, configPath string) error {
 // line flag that supplies log file locations.
 func obtainLogLocations(locs []string, useConfig bool) ([]string, error) {
 	if len(locs) > 0 && Config != "" {
-		return []string{}, DualConfig
+		return nil, errDualConfig
 	}
 	if len(locs) < 1 && Config == "" {
-		return []string{}, MustProvideConfig
+		return nil, errMustProvideConfig
 	}
 
 	if useConfig {
