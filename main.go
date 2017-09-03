@@ -1,25 +1,22 @@
 package main
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 
 	"github.com/hpcloud/tail"
-	"github.com/spf13/viper"
 	"github.com/urfave/cli"
 )
 
 var (
-	locations         cli.StringSlice
-	Config            string
-	ClearFilesOnClose bool
-	LogToFile         string
-	LogFile           *os.File
-	wg                sync.WaitGroup
-	closingChannel    = make(chan os.Signal, 1)
+	flagLocations         cli.StringSlice
+	flagConfig            string
+	flagClearFilesOnClose bool
+	flagLogToFile         string
+
+	closingChannel = make(chan os.Signal, 1)
+	tailConfig     = tail.Config{Follow: true, MustExist: true}
 )
 
 func main() {
@@ -31,51 +28,37 @@ func main() {
 		cli.StringFlag{
 			Name:        "config",
 			Usage:       "In the event you do not want to use the Command line flags, you can use a config file to list where your log files to aggregate are located. This flag tells aggregator where to find the config.yaml file. The string you provide is the path to where your config.yaml file is located.",
-			Destination: &Config,
+			Destination: &flagConfig,
 		},
 		cli.StringSliceFlag{
 			Name:  "logFiles",
 			Usage: "Provide a comma seperated list of strings, this tells aggregator the locations of the log files you want to aggregate.",
-			Value: &locations,
+			Value: &flagLocations,
 		},
 		cli.BoolFlag{
 			Name:        "clear",
 			Usage:       "This will clear the log files you are aggregating upon termination of this program. This is good for development, use with caution.",
-			Destination: &ClearFilesOnClose,
+			Destination: &flagClearFilesOnClose,
 		},
 		cli.StringFlag{
 			Name:        "logToFile",
 			Usage:       "In the event you want to have this program aggreagte logs into a single file rather than stream to the terminal, use this option to pass a string to the location where you want to log, if a file is not present at that location, we will attempt to create one.",
-			Destination: &LogToFile,
+			Destination: &flagLogToFile,
 		},
 	}
 	app.Action = func(c *cli.Context) error {
-		signal.Notify(closingChannel, os.Interrupt)
-
-		useConfigFile := useConfigFile(Config)
-		readConfigFile(useConfigFile, Config)
-
-		if useConfigFile {
-			ClearFilesOnClose = viper.GetBool("ClearLogsOnClose")
-			LogToFile = viper.GetString("LogToFile")
-		}
-		if LogToFile != "" {
-			LogFile, err := os.OpenFile(LogToFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.SetOutput(LogFile)
-		}
-
-		logLocations, err := obtainLogLocations(locations, useConfigFile)
+		appConfig, err := newConfigFromFlags()
 		if err != nil {
 			return err
 		}
 
-		tails, err := ObtainTails(logLocations)
+		signal.Notify(closingChannel, os.Interrupt)
+		appConfig.setLogOutput()
+		log.Println("Aggregator started...")
+
+		tails, err := obtainTails(appConfig.locations)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		for _, t := range tails {
@@ -84,67 +67,47 @@ func main() {
 
 		<-closingChannel
 
-		HandleClosing(tails)
+		log.Println("Shutting down...")
+		closeTails(tails)
+		appConfig.shutdown()
 
-		if ClearFilesOnClose {
-			ClearFiles(logLocations)
-		}
-
-		if LogToFile != "" {
-			LogFile.Close()
-		}
-
-		log.Println("Shutting down")
 		return nil
 	}
 	app.Run(os.Args)
 }
 
-func tailFile(tail *tail.Tail) {
-	for line := range tail.Lines {
-		log.Println(line.Text)
-	}
-}
-
-// HandleClosing should be called after the program is interrupted. Upon recieving this
-// signal it will range over the tails argument. Tails represents the *tail.Tail
-// value / pointer that is created for each and every file being tailed.
-func HandleClosing(tails []*tail.Tail) {
-	log.Println("Attempting to close aggregator")
-	for _, t := range tails {
-		t.Stop()
-		t.Cleanup()
-	}
-}
-
-// ObtainTails provided a slice of strings (that is used to represent the
+// obtainTails provided a slice of strings (that is used to represent the
 // locations of log files you wish to aggregate). Will return a matching
 // tail.Tail slice where each value in the slice is mapped from the argumented
 // locations.
-func ObtainTails(locations []string) ([]*tail.Tail, error) {
+func obtainTails(locations []string) ([]*tail.Tail, error) {
 	var tails []*tail.Tail
 	for _, l := range locations {
-		t, err := tail.TailFile(l, tail.Config{Follow: true, MustExist: true})
+		t, err := tail.TailFile(l, tailConfig)
 		if err != nil {
 			log.Println("There was an issue while attmpting to aggregate log file located at:", l)
-			return tails, err
+			return nil, err
 		}
 		tails = append(tails, t)
 	}
 	return tails, nil
 }
 
-// ClearFiles as the name suggests will locate all of the log files within
-// the locations argument - and write all of the bytes to be empty. This
-// is intended to be used per the users settings; and can be handy in development
-func ClearFiles(locations []string) {
-	for _, l := range locations {
-		log.Println("Clearning file at location:", l)
+// tailFile depends on the tail package, it essentially polls the file it
+// is supposed to log, writing the data to the corresponding log location.
+func tailFile(tail *tail.Tail) {
+	for line := range tail.Lines {
+		log.Println(line.Text)
+	}
+}
 
-		err := ioutil.WriteFile(l, []byte{}, 0666)
-		if err != nil {
-			log.Println("Unable to clear file at location:", l)
-			log.Println(err)
-		}
+// closeTails should be called after the program is interrupted. Upon recieving
+// this signal it will range over the tails argument. Tails represents the
+// *tail.Tail pointer that is created for each and every file being tailed.
+func closeTails(tails []*tail.Tail) {
+	log.Println("Attempting to close aggregator")
+	for _, t := range tails {
+		t.Stop()
+		t.Cleanup()
 	}
 }
